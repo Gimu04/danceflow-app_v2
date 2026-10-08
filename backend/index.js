@@ -42,9 +42,51 @@ app.post('/api/estudiantes', async (req, res) => {
     }
 });
 
+// ELIMINAR un estudiante
+app.delete('/api/estudiantes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Opcional: Podrías necesitar eliminar sus asistencias o inscripciones primero 
+    // dependiendo de cómo configuraste las llaves foráneas (ON DELETE CASCADE)
+    const result = await pool.query('DELETE FROM estudiantes WHERE id = $1 RETURNING *', [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Estudiante no encontrado' });
+    }
+    
+    res.json({ message: 'Estudiante eliminado correctamente' });
+  } catch (error) {
+    console.error("Error al eliminar estudiante:", error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// ACTUALIZAR un estudiante
+app.put('/api/estudiantes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nombre, apellido, email } = req.body;
+    
+    const result = await pool.query(
+      'UPDATE estudiantes SET nombre = $1, apellido = $2, email = $3 WHERE id = $4 RETURNING *',
+      [nombre, apellido, email, id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Estudiante no encontrado' });
+    }
+    
+    res.json({ message: 'Estudiante actualizado correctamente' });
+  } catch (error) {
+    console.error("Error al actualizar estudiante:", error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
 // ==========================================
 // INSTRUCTORES
 // ==========================================
+
+// CREAR un instructor
 app.get('/api/instructores', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM instructores ORDER BY nombre ASC');
@@ -55,45 +97,112 @@ app.get('/api/instructores', async (req, res) => {
 });
 
 app.post('/api/instructores', async (req, res) => {
-    try {
-        const { nombre, especialidad, telefono } = req.body;
-        const query = 'INSERT INTO instructores (nombre, especialidad, telefono) VALUES ($1, $2, $3) RETURNING *;';
-        const result = await pool.query(query, [nombre, especialidad, telefono]);
-        res.status(201).json(result.rows[0]);
-    } catch (error) {
-        res.status(500).json({ error: 'Error al crear instructor' });
-    }
+  try {
+    const { nombre, apellido, especialidad } = req.body;
+    const query = `
+      INSERT INTO instructores (nombre, apellido, especialidad) 
+      VALUES ($1, $2, $3) RETURNING *;
+    `;
+    const result = await pool.query(query, [nombre, apellido, especialidad]);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error("Error en BD al crear instructor:", error);
+    // Cambiamos 'Error interno' por el error real para saber qué falla
+    res.status(500).json({ error: error.message }); 
+  }
+});
+
+// ACTUALIZAR un instructor
+app.put('/api/instructores/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nombre, apellido, especialidad } = req.body;
+    
+    const query = `
+      UPDATE instructores 
+      SET nombre = $1, apellido = $2, especialidad = $3 
+      WHERE id = $4 RETURNING *;
+    `;
+    const result = await pool.query(query, [nombre, apellido, especialidad, id]);
+    
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Instructor no encontrado' });
+    res.json({ message: 'Instructor actualizado exitosamente' });
+  } catch (error) {
+    console.error("Error en BD al actualizar instructor:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/instructores/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM instructores WHERE id = $1 RETURNING *', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Instructor no encontrado' });
+    res.json({ message: 'Instructor eliminado' });
+  } catch (error) { res.status(500).json({ error: 'Error interno' }); }
 });
 
 // ==========================================
 // CLASES
 // ==========================================
 app.get('/api/clases', async (req, res) => {
-    try {
-        const query = `
-            SELECT c.id, c.estilo, c.nivel, c.dia_semana, c.hora_inicio, i.nombre AS instructor 
-            FROM clases c
-            LEFT JOIN instructores i ON c.instructor_id = i.id;
-        `;
-        const result = await pool.query(query);
-        res.json(result.rows);
-    } catch (error) {
-        res.status(500).json({ error: 'Error al obtener clases' });
-    }
+  try {
+    const result = await pool.query('SELECT * FROM clases ORDER BY id DESC');
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Error al obtener clases:", error);
+    res.status(500).json({ error: 'Error al obtener clases' });
+  }
 });
 
+// CREAR una clase
 app.post('/api/clases', async (req, res) => {
-    try {
-        const { estilo, nivel, dia_semana, hora_inicio, instructor_id } = req.body;
-        const query = `
-            INSERT INTO clases (estilo, nivel, dia_semana, hora_inicio, instructor_id)
-            VALUES ($1, $2, $3, $4, $5) RETURNING *;
-        `;
-        const result = await pool.query(query, [estilo, nivel, dia_semana, hora_inicio, instructor_id]);
-        res.status(201).json(result.rows[0]);
-    } catch (error) {
-        res.status(500).json({ error: 'Error al crear la clase' });
-    }
+  try {
+    const { nombre, instructor_id, dia_semana, horario, capacidad } = req.body;
+    const instId = parseInt(instructor_id, 10);
+    const cap = parseInt(capacidad, 10);
+
+    const query = `
+      INSERT INTO clases (nombre, instructor_id, dia_semana, horario, capacidad) 
+      VALUES ($1, $2, $3, $4, $5) RETURNING *;
+    `;
+    const result = await pool.query(query, [nombre, instId, dia_semana, horario, cap]);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error("Error en BD al crear clase:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ACTUALIZAR una clase
+app.put('/api/clases/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nombre, instructor_id, dia_semana, horario, capacidad } = req.body;
+    const instId = parseInt(instructor_id, 10);
+    const cap = parseInt(capacidad, 10);
+
+    const result = await pool.query(
+      'UPDATE clases SET nombre = $1, instructor_id = $2, dia_semana = $3, horario = $4, capacidad = $5 WHERE id = $6 RETURNING *',
+      [nombre, instId, dia_semana, horario, cap, id]
+    );
+    
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Clase no encontrada' });
+    res.json({ message: 'Clase actualizada' });
+  } catch (error) {
+    console.error("Error en BD al actualizar clase:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ELIMINAR una clase
+app.delete('/api/clases/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM clases WHERE id = $1 RETURNING *', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Clase no encontrada' });
+    res.json({ message: 'Clase eliminada' });
+  } catch (error) { res.status(500).json({ error: 'Error interno' }); }
 });
 
 // ==========================================
@@ -196,7 +305,33 @@ app.get('/api/asistencias', async (req, res) => {
     }
 });
 
+// OBTENER datos para el Dashboard (Asistencias recientes)
+app.get('/api/dashboard', async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        a.id, 
+        e.nombre AS estudiante_nombre, 
+        e.apellido AS estudiante_apellido, 
+        c.nombre AS clase_nombre, 
+        a.fecha, 
+        a.estado 
+      FROM asistencias a
+      JOIN estudiantes e ON a.estudiante_id = e.id
+      JOIN clases c ON a.clase_id = c.id
+      ORDER BY a.fecha DESC 
+      LIMIT 15;
+    `;
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Error en BD al cargar dashboard:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Servidor de DanceFlow corriendo en el puerto ${PORT} 🕺💃`);
 });
+
